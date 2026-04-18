@@ -9,14 +9,18 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -51,7 +55,12 @@ func main() {
 	r.Use(middleware.Timeout(15 * time.Second))
 	r.Use(noStoreHeader)
 
-	h := &handlers{pool: pool, log: logger}
+	h := &handlers{
+		pool:          pool,
+		log:           logger,
+		llmGatewayURL: envOr("LLM_GATEWAY_URL", "http://localhost:8090"),
+		httpc:         &http.Client{Timeout: 15 * time.Second},
+	}
 
 	r.Get("/healthz", h.health)
 	r.Route("/v1", func(r chi.Router) {
@@ -97,8 +106,17 @@ func noStoreHeader(next http.Handler) http.Handler {
 }
 
 type handlers struct {
-	pool *pgxpool.Pool
-	log  *slog.Logger
+	pool          *pgxpool.Pool
+	log           *slog.Logger
+	llmGatewayURL string
+	httpc         *http.Client
+}
+
+func envOr(k, d string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return d
 }
 
 func (h *handlers) health(w http.ResponseWriter, r *http.Request) {
@@ -179,16 +197,222 @@ func (h *handlers) listSightings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+// Allowed categories for public submissions. Must match the
+// sighting_category enum in 0001_init.sql.
+var allowedCategories = map[string]bool{
+	"sighting":         true,
+	"checkpoint":       true,
+	"courthouse":       true,
+	"raid_rumor":       true,
+	"detention":        true,
+	"agency_presence":  true,
+}
+
+type createSightingRequest struct {
+	Lat          float64   `json:"lat"`
+	Lng          float64   `json:"lng"`
+	ObservedAt   time.Time `json:"observed_at"`
+	Category     string    `json:"category"`
+	Notes        string    `json:"notes,omitempty"`
+	Language     string    `json:"language,omitempty"`
+	SourceURL    string    `json:"source_url,omitempty"`
+	PartnerToken string    `json:"partner_token,omitempty"`
+}
+
 func (h *handlers) createSighting(w http.ResponseWriter, r *http.Request) {
-	// TODO(week-5): wire to ModerationService.Scrub then insert with snapped
-	// coords. Returning 501 until then so the public surface is honest about
-	// what does and does not exist.
-	_ = decay.HorizonHours
-	http.Error(w, "submission flow not implemented in skeleton", http.StatusNotImplemented)
+	var req createSightingRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, 32*1024)).Decode(&req); err != nil {
+		http.Error(w, "bad json", http.StatusBadRequest)
+		return
+	}
+
+	// Category must be in the enum.
+	if !allowedCategories[req.Category] {
+		http.Error(w, "invalid category", http.StatusBadRequest)
+		return
+	}
+
+	// Observed time must be within the decay horizon. Allow a small skew
+	// into the future to accommodate client clock drift.
+	now := time.Now()
+	if req.ObservedAt.After(now.Add(5 * time.Minute)) {
+		http.Error(w, "observed_at in the future", http.StatusBadRequest)
+		return
+	}
+	if !decay.Visible(req.ObservedAt, now) {
+		http.Error(w, fmt.Sprintf("observed_at older than %.0fh horizon", decay.HorizonHours), http.StatusBadRequest)
+		return
+	}
+
+	// Either a public source URL or a partner hotline token is required.
+	if req.SourceURL == "" && req.PartnerToken == "" {
+		http.Error(w, "source_url or partner_token required", http.StatusBadRequest)
+		return
+	}
+	if req.SourceURL != "" {
+		if u, err := url.Parse(req.SourceURL); err != nil || u.Scheme != "https" || u.Host == "" {
+			http.Error(w, "source_url must be https://", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Coordinates must land inside the MN bbox (pre-filter; PostGIS is SoT).
+	if !geo.InMinnesotaBBox(geo.Coord{Lat: req.Lat, Lng: req.Lng}) {
+		http.Error(w, "location outside supported region", http.StatusBadRequest)
+		return
+	}
+
+	// Snap to the 200m grid. Original precision is discarded here and never
+	// persisted. See docs/safety-policy.md §4.
+	snapped := geo.SnapToCoarseGrid(geo.Coord{Lat: req.Lat, Lng: req.Lng})
+
+	// Scrub notes via the LLM gateway. If the gateway is unreachable we
+	// fall back to storing an empty notes field rather than storing raw
+	// user input — safer to lose content than to leak PII.
+	scrubbed := ""
+	if strings.TrimSpace(req.Notes) != "" {
+		s, err := h.scrub(r.Context(), req.Notes, req.Language)
+		if err != nil {
+			h.log.Warn("scrub failed; dropping notes", "err", err)
+		} else {
+			scrubbed = s
+		}
+	}
+
+	lang := req.Language
+	if lang == "" {
+		lang = "en"
+	}
+
+	tx, err := h.pool.Begin(r.Context())
+	if err != nil {
+		h.log.Error("begin tx", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer func() { _ = tx.Rollback(r.Context()) }()
+
+	// Provenance row.
+	kind := "human_public"
+	if req.PartnerToken != "" {
+		kind = "human_partner"
+	}
+	var sourceID string
+	if err := tx.QueryRow(r.Context(), `
+		INSERT INTO sources (kind, url, producer, fetched_at)
+		VALUES ($1::source_kind, $2, 'api/createSighting', NOW())
+		RETURNING id`, kind, req.SourceURL).Scan(&sourceID); err != nil {
+		h.log.Error("insert source", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Insert as `pending`. The moderation service (week 5) promotes to
+	// `published` after crowd-verify threshold or moderator approval.
+	var id string
+	if err := tx.QueryRow(r.Context(), `
+		INSERT INTO sightings (
+			location, observed_at, category, notes_scrubbed, notes_language,
+			source_id, status
+		)
+		VALUES (
+			ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography,
+			$3, $4::sighting_category, $5, $6::language_code,
+			$7, 'pending'
+		)
+		RETURNING id`,
+		snapped.Lng, snapped.Lat, req.ObservedAt, req.Category, scrubbed, lang, sourceID,
+	).Scan(&id); err != nil {
+		h.log.Error("insert sighting", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	if _, err := tx.Exec(r.Context(), `
+		INSERT INTO moderation_decisions (subject_id, subject_kind, action, source, reason)
+		VALUES ($1, 'sighting', 'escalate', 'auto', 'newly created; awaiting moderation')`, id); err != nil {
+		h.log.Error("insert moderation decision", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		h.log.Error("commit", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"id":     id,
+		"status": "pending",
+	})
+}
+
+type voteRequest struct {
+	Vote        string `json:"vote"` // "confirm" | "deny"
+	Attestation string `json:"attestation,omitempty"`
 }
 
 func (h *handlers) voteSighting(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "vote flow not implemented in skeleton", http.StatusNotImplemented)
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		http.Error(w, "missing id", http.StatusBadRequest)
+		return
+	}
+	var v voteRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, 4*1024)).Decode(&v); err != nil {
+		http.Error(w, "bad json", http.StatusBadRequest)
+		return
+	}
+	var col string
+	switch v.Vote {
+	case "confirm":
+		col = "confirms"
+	case "deny":
+		col = "denies"
+	default:
+		http.Error(w, "vote must be 'confirm' or 'deny'", http.StatusBadRequest)
+		return
+	}
+	// Rate-limits + attestation enforcement land alongside the moderation
+	// service in week 5. In v0 we accept the vote if the sighting exists.
+	ct, err := h.pool.Exec(r.Context(), fmt.Sprintf(`
+		UPDATE sightings
+		SET %s = %s + 1, updated_at = NOW()
+		WHERE id = $1 AND status IN ('pending', 'published')`, col, col), id)
+	if err != nil {
+		h.log.Error("vote update", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if ct.RowsAffected() == 0 {
+		http.Error(w, "sighting not found or not votable", http.StatusNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// scrub calls the llm-gateway /v1/scrub endpoint.
+func (h *handlers) scrub(ctx context.Context, text, lang string) (string, error) {
+	body, _ := json.Marshal(map[string]string{"text": text, "language": lang})
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, h.llmGatewayURL+"/v1/scrub", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := h.httpc.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		msg, _ := io.ReadAll(resp.Body)
+		return "", errors.New("llm-gateway: " + resp.Status + ": " + string(msg))
+	}
+	var out struct {
+		Text string `json:"text"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return "", err
+	}
+	return out.Text, nil
 }
 
 func (h *handlers) listResources(w http.ResponseWriter, r *http.Request) {
