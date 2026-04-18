@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package fuzzbuster.v1;
+
+import "google/protobuf/timestamp.proto";
+import "fuzzbuster/v1/common.proto";
+
+option go_package = "github.com/fuzzbuster/fuzzbuster/infra/buf/go/fuzzbuster/v1;fuzzbusterv1";
+
+// ScrubRequest sends raw user-submitted text through the PII scrubber.
+// Caller MUST NOT persist the original text after calling.
+message ScrubRequest {
+  string text = 1;
+  Language language = 2;
+}
+
+message ScrubResponse {
+  string text_scrubbed = 1;
+  // What categories of PII were removed, for golden-set testing only. Never
+  // expose to public API.
+  repeated string removed_categories = 2;
+}
+
+// ClassifyRequest asks the LLM gateway to classify a RawItem-style payload.
+message ClassifyRequest {
+  string text = 1;
+  Language language = 2;
+}
+
+message ClassifyResponse {
+  enum Bucket {
+    BUCKET_UNSPECIFIED = 0;
+    BUCKET_DISCARD = 1;
+    BUCKET_SIGHTING = 2;
+    BUCKET_RESOURCE_CANDIDATE = 3;
+    BUCKET_EVENT_CANDIDATE = 4;
+    BUCKET_NEEDS_HUMAN_MODERATOR = 5;
+  }
+  Bucket bucket = 1;
+  // 0..1; below 0.7 the orchestrator escalates to Claude.
+  float confidence = 2;
+  string reasoning = 3;          // short chain-of-thought summary, NOT user-facing
+  string model_used = 4;         // "llama3.1:8b" or "claude-haiku-4-5"
+}
+
+// ModerationDecision is recorded for every state transition that affects
+// public visibility.
+message ModerationDecision {
+  string id = 1;
+  string subject_id = 2;          // sighting / resource / event id
+  string subject_kind = 3;        // "sighting" | "resource" | "event"
+
+  enum Action {
+    ACTION_UNSPECIFIED = 0;
+    ACTION_PUBLISH = 1;
+    ACTION_HIDE = 2;
+    ACTION_DELETE = 3;
+    ACTION_ESCALATE = 4;
+  }
+  Action action = 4;
+
+  enum Source {
+    SOURCE_UNSPECIFIED = 0;
+    SOURCE_AUTO = 1;              // auto-publish or auto-hide rule
+    SOURCE_CROWD = 2;             // crowd-verify threshold
+    SOURCE_MODERATOR = 3;         // human moderator
+    SOURCE_DECAY = 4;             // time-decay
+  }
+  Source source = 5;
+
+  string reason = 6;
+  string moderator_id = 7;        // opaque; only meaningful inside the moderation service
+  google.protobuf.Timestamp at = 8;
+}
+
+service ModerationService {
+  rpc Scrub(ScrubRequest) returns (ScrubResponse);
+  rpc Classify(ClassifyRequest) returns (ClassifyResponse);
+}

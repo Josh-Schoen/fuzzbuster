@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package fuzzbuster.v1;
+
+import "google/protobuf/timestamp.proto";
+import "fuzzbuster/v1/common.proto";
+
+option go_package = "github.com/fuzzbuster/fuzzbuster/infra/buf/go/fuzzbuster/v1;fuzzbusterv1";
+
+// ScrapeJob is dispatched by the orchestrator to either a Go static scraper
+// or the Node browser-agent service.
+message ScrapeJob {
+  string id = 1;
+  // Skill or scraper to run, e.g. "news-mprnews" or "rss-gdelt".
+  string producer = 2;
+  // Free-form params interpreted by the producer.
+  map<string, string> params = 3;
+  google.protobuf.Timestamp scheduled_at = 4;
+  // ISO 3166-2 region constraint, e.g. "US-MN".
+  string region = 5;
+}
+
+// RawItem is the unit of output from a scraper or browser agent. The LLM
+// gateway decides what to do with it next (classify → sighting / resource /
+// event / discard).
+message RawItem {
+  string id = 1;
+  SourceRef source = 2;
+  // The plain-text content the agent extracted. May be a news article body,
+  // a social post, a press-release text, etc. Already cleaned of obvious
+  // markup but NOT yet PII-scrubbed.
+  string text = 3;
+  // Raw metadata the agent collected (author handle if public, post URL,
+  // detected language code, etc.). Keys/values must not contain PII of
+  // private individuals.
+  map<string, string> metadata = 4;
+  google.protobuf.Timestamp captured_at = 5;
+  // If the agent already inferred a candidate location from the page, it
+  // goes here. The orchestrator will geocode if missing.
+  PreciseLocation candidate_location = 6;
+  // Detected language; the gateway routes to translation if not in the
+  // supported set.
+  Language language = 7;
+}
+
+message ScrapeResult {
+  string job_id = 1;
+  repeated RawItem items = 2;
+  // Cost telemetry so the orchestrator can budget Claude API spend per job.
+  int64 input_tokens = 3;
+  int64 output_tokens = 4;
+  string model_used = 5;   // e.g. "claude-haiku-4-5", "llama3.1:8b"
+  string error = 6;        // empty if success
+}
+
+// ScraperService is implemented by the Node + Playwright + Stagehand service.
+// The Go orchestrator is the client.
+service ScraperService {
+  rpc RunJob(ScrapeJob) returns (ScrapeResult);
+}

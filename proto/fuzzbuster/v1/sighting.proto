@@ -1,0 +1,111 @@
+syntax = "proto3";
+
+package fuzzbuster.v1;
+
+import "google/protobuf/timestamp.proto";
+import "fuzzbuster/v1/common.proto";
+
+option go_package = "github.com/fuzzbuster/fuzzbuster/infra/buf/go/fuzzbuster/v1;fuzzbusterv1";
+
+// Sighting is a time-decayed report of ICE activity. See docs/safety-policy.md
+// for the rules every field is built to honor.
+message Sighting {
+  string id = 1;
+
+  // Coarsened to the 200m grid. Original precision MUST NOT be retained.
+  CoarseLocation location = 2;
+
+  // The time window in which the activity was observed. Must be in the past
+  // and within the allowed lookback (currently 8h via decay).
+  google.protobuf.Timestamp observed_at = 3;
+
+  enum Category {
+    CATEGORY_UNSPECIFIED = 0;
+    CATEGORY_SIGHTING = 1;          // ICE personnel or vehicles seen
+    CATEGORY_CHECKPOINT = 2;        // road checkpoint
+    CATEGORY_COURTHOUSE = 3;        // courthouse arrest activity
+    CATEGORY_RAID_RUMOR = 4;        // unverified raid rumor (extra moderation)
+    CATEGORY_DETENTION = 5;         // detention facility activity (visiting hours, etc.)
+    CATEGORY_AGENCY_PRESENCE = 6;   // ERO / HSI presence at a public event
+  }
+  Category category = 4;
+
+  // Free-text notes AFTER the PII scrubber has run. Original notes are not
+  // stored.
+  string notes_scrubbed = 5;
+  Language notes_language = 6;
+
+  SourceRef source = 7;
+
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_PENDING = 1;        // awaiting moderation / verification
+    STATUS_PUBLISHED = 2;
+    STATUS_HIDDEN = 3;         // crowd-verify auto-hide or moderator hide
+    STATUS_EXPIRED = 4;        // past the decay horizon
+  }
+  Status status = 8;
+
+  // Counts for the public crowd-verify UI.
+  int32 confirms = 9;
+  int32 denies = 10;
+
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+// CreateSightingRequest is what the public submission form sends. The server
+// is responsible for: (1) running the PII scrubber on `notes`, (2) snapping
+// `latitude`/`longitude` to the coarse grid, (3) discarding the precise
+// coordinates immediately after snapping.
+message CreateSightingRequest {
+  double latitude = 1;
+  double longitude = 2;
+  google.protobuf.Timestamp observed_at = 3;
+  Sighting.Category category = 4;
+  string notes = 5;
+  Language notes_language = 6;
+  // Required: a public source URL OR a partner hotline token.
+  string source_url = 7;
+  string partner_token = 8;
+}
+
+message CreateSightingResponse {
+  Sighting sighting = 1;
+}
+
+message ListSightingsRequest {
+  // Bounding box for the map viewport.
+  double min_latitude = 1;
+  double min_longitude = 2;
+  double max_latitude = 3;
+  double max_longitude = 4;
+  // Hide anything older than this many hours; server-side cap = 8.
+  int32 max_age_hours = 5;
+}
+
+message ListSightingsResponse {
+  repeated Sighting sightings = 1;
+}
+
+message ConfirmDenyRequest {
+  string sighting_id = 1;
+  enum Vote {
+    VOTE_UNSPECIFIED = 0;
+    VOTE_CONFIRM = 1;
+    VOTE_DENY = 2;
+  }
+  Vote vote = 2;
+  // Anonymous device-attestation token (App Attest / Play Integrity / hCaptcha).
+  string attestation = 3;
+}
+
+message ConfirmDenyResponse {
+  Sighting sighting = 1;
+}
+
+service SightingService {
+  rpc CreateSighting(CreateSightingRequest) returns (CreateSightingResponse);
+  rpc ListSightings(ListSightingsRequest) returns (ListSightingsResponse);
+  rpc ConfirmDeny(ConfirmDenyRequest) returns (ConfirmDenyResponse);
+}

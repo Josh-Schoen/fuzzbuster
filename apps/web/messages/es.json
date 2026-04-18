@@ -1,0 +1,29 @@
+{
+  "appName": "Fuzzbuster",
+  "tagline": "Seguridad comunitaria, ayuda mutua y Conozca Sus Derechos para Minnesota.",
+  "nav": {
+    "map": "Mapa",
+    "resources": "Recursos",
+    "submit": "Enviar un avistamiento",
+    "kyr": "Conozca Sus Derechos",
+    "tip": "Donar"
+  },
+  "submitNotice": "Anónimo. Se requiere un enlace fuente o un token de línea de socio. Descartamos las coordenadas precisas después de redondearlas a la cuadrícula de 200m. Nunca recopilamos su IP, correo electrónico ni ID de dispositivo.",
+  "decayNotice": "No se muestran los avistamientos de más de 8 horas.",
+  "tip": {
+    "heading": "Donar",
+    "intro": "Las donaciones se dividen: la ayuda familiar va a fondos verificados de fianzas y ayuda mutua; las operaciones mantienen los servidores y la moderación funcionando. El libro mayor completo es público.",
+    "familyAid": "Ayuda familiar",
+    "operations": "Operaciones",
+    "donateButton": "Donar vía Open Collective"
+  },
+  "kyr": {
+    "heading": "Conozca Sus Derechos",
+    "intro": "Si lo detiene ICE: tiene derecho a permanecer en silencio, derecho a negarse a firmar cualquier cosa que no entienda y derecho a hablar con un abogado."
+  },
+  "footer": {
+    "safetyPolicy": "Política de seguridad",
+    "transparency": "Informe de transparencia",
+    "source": "Código fuente"
+  }
+}

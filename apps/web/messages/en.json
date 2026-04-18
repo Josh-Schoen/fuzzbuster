@@ -1,0 +1,29 @@
+{
+  "appName": "Fuzzbuster",
+  "tagline": "Community safety, mutual aid, and Know-Your-Rights for Minnesota.",
+  "nav": {
+    "map": "Map",
+    "resources": "Resources",
+    "submit": "Submit a sighting",
+    "kyr": "Know Your Rights",
+    "tip": "Tip"
+  },
+  "submitNotice": "Anonymous. Source URL or partner-hotline token required. We discard precise coordinates after rounding to the 200m grid. We never collect your IP, email, or device ID.",
+  "decayNotice": "Sightings older than 8 hours are not shown.",
+  "tip": {
+    "heading": "Tip",
+    "intro": "Donations are split: family aid goes to verified bond and mutual-aid funds; operations keeps the servers and moderation running. Full ledger is public.",
+    "familyAid": "Family aid",
+    "operations": "Operations",
+    "donateButton": "Donate via Open Collective"
+  },
+  "kyr": {
+    "heading": "Know Your Rights",
+    "intro": "If you are stopped by ICE: you have the right to remain silent, the right to refuse to sign anything you don't understand, and the right to speak with a lawyer."
+  },
+  "footer": {
+    "safetyPolicy": "Safety policy",
+    "transparency": "Transparency report",
+    "source": "Source code"
+  }
+}

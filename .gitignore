@@ -1,0 +1,47 @@
+# Generated code
+infra/buf/
+**/gen/
+**/*.pb.go
+**/*_pb.ts
+**/*_connect.ts
+
+# Go
+**/bin/
+**/vendor/
+*.test
+*.out
+
+# Node
+node_modules/
+.next/
+.turbo/
+.pnpm-store/
+playwright-report/
+test-results/
+.npmrc.local
+
+# Python (sidecar tools only)
+__pycache__/
+.venv/
+*.pyc
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local data
+.local/
+tmp/
+data/postgres/
+data/redis/
+data/nominatim/
+data/ollama/

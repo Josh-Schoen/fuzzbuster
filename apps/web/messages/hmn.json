@@ -1,0 +1,29 @@
+{
+  "appName": "Fuzzbuster",
+  "tagline": "Kev nyab xeeb hauv zej zog, kev pab sib pab, thiab Paub Koj Cov Cai rau Minnesota.",
+  "nav": {
+    "map": "Daim Ntawv Qhia",
+    "resources": "Cov Khoom Pab",
+    "submit": "Xa kev pom",
+    "kyr": "Paub Koj Cov Cai",
+    "tip": "Pub Nyiaj"
+  },
+  "submitNotice": "Tsis qhia npe. Yuav tsum muaj URL qhov chaw lossis lub cim ntawm tus khub. Peb muab cov coordinate ntse pov tseg tom qab kho mus rau qhov 200m grid. Peb yeej tsis sau koj IP, email, lossis ID ntawm lub ntaus ntawv.",
+  "decayNotice": "Cov pom uas laus dua 8 teev tsis tau muab nthuav tawm.",
+  "tip": {
+    "heading": "Pub Nyiaj",
+    "intro": "Cov nyiaj pub raug muab faib: kev pab tsev neeg mus rau cov nyiaj pov hwm thiab cov nyiaj sib pab raug pom zoo; kev ua haujlwm khaws cov servers thiab kev tswj kom khiav tau. Cov phau ntawv loj puv yog rau pej xeem.",
+    "familyAid": "Pab tsev neeg",
+    "operations": "Kev ua haujlwm",
+    "donateButton": "Pub nyiaj ntawm Open Collective"
+  },
+  "kyr": {
+    "heading": "Paub Koj Cov Cai",
+    "intro": "Yog ICE nres koj: koj muaj cai nyob twj ywm, cai tsis kos npe rau ib yam dab tsi koj tsis to taub, thiab cai tham nrog ib tug kws lij choj."
+  },
+  "footer": {
+    "safetyPolicy": "Cov cai kev nyab xeeb",
+    "transparency": "Daim ntawv tshaj tawm pob tshab",
+    "source": "Source code"
+  }
+}

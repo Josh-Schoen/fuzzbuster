@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package fuzzbuster.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/fuzzbuster/fuzzbuster/infra/buf/go/fuzzbuster/v1;fuzzbusterv1";
+
+// CoarseLocation is a sighting location rounded to the ~200m grid defined in
+// docs/safety-policy.md. Original precision MUST be discarded before this
+// struct is constructed; do not store-then-redact.
+message CoarseLocation {
+  // Latitude in degrees, snapped to the 200m grid.
+  double latitude = 1;
+  // Longitude in degrees, snapped to the 200m grid.
+  double longitude = 2;
+  // Optional human-readable label, e.g. "near 47th & Western, Minneapolis".
+  // The label MUST NOT contain a house number.
+  string label = 3;
+}
+
+// PreciseLocation is for resources (legal-aid offices, hotline desks, KYR
+// distribution sites) which are public addresses. Never use this for
+// sightings or for individuals.
+message PreciseLocation {
+  double latitude = 1;
+  double longitude = 2;
+  string street = 3;
+  string city = 4;
+  // Two-letter US state code, e.g. "MN".
+  string region = 5;
+  string postal_code = 6;
+  string country = 7;
+}
+
+// SourceRef is the provenance of a record. Every record MUST carry one.
+message SourceRef {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    KIND_RSS = 1;
+    KIND_API = 2;
+    KIND_BROWSER_AGENT = 3;
+    KIND_HUMAN_PUBLIC = 4;
+    KIND_HUMAN_PARTNER = 5;
+    KIND_HUMAN_MODERATOR = 6;
+  }
+  Kind kind = 1;
+  // Canonical URL or partner-feed identifier.
+  string url = 2;
+  // Skill or scraper that produced this record (e.g. "news-mprnews"), if any.
+  string producer = 3;
+  google.protobuf.Timestamp fetched_at = 4;
+}
+
+// Language is an ISO 639-1 code we explicitly support. Anything outside this
+// list goes through the translation path.
+enum Language {
+  LANGUAGE_UNSPECIFIED = 0;
+  LANGUAGE_EN = 1;
+  LANGUAGE_ES = 2;
+  LANGUAGE_HT = 3;  // Haitian Creole
+  LANGUAGE_AR = 4;
+  LANGUAGE_ZH = 5;
+  LANGUAGE_SO = 6;  // Somali (relevant for Minnesota)
+  LANGUAGE_HMN = 7; // Hmong (relevant for Minnesota)
+}

@@ -1,0 +1,29 @@
+{
+  "appName": "Fuzzbuster",
+  "tagline": "Badbaadada bulshada, kaalmada wadajirka, iyo Ogow Xuquuqdaada ee Minnesota.",
+  "nav": {
+    "map": "Khariidad",
+    "resources": "Ilaha",
+    "submit": "Soo gudbi arag",
+    "kyr": "Ogow Xuquuqdaada",
+    "tip": "Tabaruc"
+  },
+  "submitNotice": "Qarsoodi. URL-ka isha ama astaanta khadka shariigga waa loo baahan yahay. Waxaan tuurnaa isuduwayaasha saxda ah ka dib markii loo qiyaaso shabakada 200m. Marnaba ma aruurin IP-gaaga, iimaylkaaga, ama ID-ga aaladda.",
+  "decayNotice": "Aragtiyada ka weyn 8 saacadood lama soo bandhigayo.",
+  "tip": {
+    "heading": "Tabaruc",
+    "intro": "Tabarucida waa la qaybiyaa: kaalmada qoyska waxay tagtaa hay'adaha damaanad-qaadka iyo kaalmada wadajirka ee la xaqiijiyay; hawlgallada waxay sii wadaan inay shaqeeyaan server-yada iyo dhex-dhexaadinta. Buugga lacagta oo dhammaystiran ayaa loo daabacay dadweynaha.",
+    "familyAid": "Kaalmada qoyska",
+    "operations": "Hawlgallada",
+    "donateButton": "Ku tabaruc Open Collective"
+  },
+  "kyr": {
+    "heading": "Ogow Xuquuqdaada",
+    "intro": "Haddii ICE ku joojiyo: waxaad xaq u leedahay inaad aamustid, xaq u leedahay inaad diiddo inaad saxiixdo wax aanad fahmin, iyo xaq inaad la hadasho qareen."
+  },
+  "footer": {
+    "safetyPolicy": "Siyaasada badbaadada",
+    "transparency": "Warbixinta hufnaanta",
+    "source": "Koodhka isha"
+  }
+}

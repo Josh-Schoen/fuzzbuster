@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package fuzzbuster.v1;
+
+import "google/protobuf/timestamp.proto";
+import "fuzzbuster/v1/common.proto";
+
+option go_package = "github.com/fuzzbuster/fuzzbuster/infra/buf/go/fuzzbuster/v1;fuzzbusterv1";
+
+// Resource is a curated, long-lived directory entry: legal-aid orgs,
+// hotlines, KYR materials, mutual-aid funds, rapid-response networks, KYR
+// trainings. Resources do NOT decay; they are reviewed quarterly.
+message Resource {
+  string id = 1;
+
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    KIND_LEGAL_AID = 1;
+    KIND_HOTLINE = 2;
+    KIND_KYR_MATERIAL = 3;
+    KIND_MUTUAL_AID_FUND = 4;
+    KIND_RAPID_RESPONSE = 5;
+    KIND_DETENTION_VISITATION = 6;
+    KIND_BOND_FUND = 7;
+    KIND_TRAINING_OR_EVENT = 8;
+  }
+  Kind kind = 2;
+
+  string name = 3;
+  string description = 4;
+  // Languages the resource can serve.
+  repeated Language languages = 5;
+
+  // Optional precise location (resources are public addresses).
+  PreciseLocation location = 6;
+
+  string url = 7;
+  string phone = 8;       // E.164 if possible
+  string email = 9;
+  // Free-text hours, e.g. "Mon–Fri 9am–5pm CT". Localized client-side later.
+  string hours = 10;
+
+  // Has the org consented in writing to be listed? Required = true before
+  // public display.
+  bool consent_on_file = 11;
+  string consent_evidence_url = 12;  // internal link, not exposed to public API
+
+  google.protobuf.Timestamp last_reviewed_at = 13;
+  google.protobuf.Timestamp created_at = 14;
+  google.protobuf.Timestamp updated_at = 15;
+}
+
+message ListResourcesRequest {
+  repeated Resource.Kind kinds = 1;
+  string region = 2;     // two-letter US state code, e.g. "MN"
+  Language language = 3;
+}
+
+message ListResourcesResponse {
+  repeated Resource resources = 1;
+}
+
+message UpsertResourceRequest {
+  Resource resource = 1;
+}
+
+message UpsertResourceResponse {
+  Resource resource = 1;
+}
+
+service ResourceService {
+  rpc ListResources(ListResourcesRequest) returns (ListResourcesResponse);
+  rpc UpsertResource(UpsertResourceRequest) returns (UpsertResourceResponse);
+}

@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package fuzzbuster.v1;
+
+import "google/protobuf/timestamp.proto";
+import "fuzzbuster/v1/common.proto";
+
+option go_package = "github.com/fuzzbuster/fuzzbuster/infra/buf/go/fuzzbuster/v1;fuzzbusterv1";
+
+// Event is a public, organized happening: KYR training, citizenship clinic,
+// rally, vigil, fundraising drive, etc. Distinct from Sighting (decayed,
+// crowd-sourced) and Resource (durable, curated).
+message Event {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  repeated Language languages = 4;
+
+  PreciseLocation location = 5;
+  google.protobuf.Timestamp starts_at = 6;
+  google.protobuf.Timestamp ends_at = 7;
+
+  // Org hosting the event; must reference a Resource id with consent_on_file.
+  string host_resource_id = 8;
+
+  string url = 9;
+  SourceRef source = 10;
+
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_PENDING = 1;
+    STATUS_PUBLISHED = 2;
+    STATUS_CANCELLED = 3;
+    STATUS_PAST = 4;
+  }
+  Status status = 11;
+
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp updated_at = 13;
+}
+
+message ListEventsRequest {
+  string region = 1;
+  Language language = 2;
+  google.protobuf.Timestamp from = 3;
+  google.protobuf.Timestamp to = 4;
+}
+
+message ListEventsResponse {
+  repeated Event events = 1;
+}
+
+message UpsertEventRequest {
+  Event event = 1;
+}
+
+message UpsertEventResponse {
+  Event event = 1;
+}
+
+service EventService {
+  rpc ListEvents(ListEventsRequest) returns (ListEventsResponse);
+  rpc UpsertEvent(UpsertEventRequest) returns (UpsertEventResponse);
+}
